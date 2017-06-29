@@ -9,7 +9,7 @@ namespace ShippingTrackingUtilities
 {
     public class USPSTracking : ITrackingFacility
     {
-        string trackingNumber;
+        string[] trackingNumber;
 
         public USPSTracking(string trackingNumber)
         {
