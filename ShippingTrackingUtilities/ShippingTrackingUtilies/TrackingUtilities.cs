@@ -33,20 +33,20 @@ namespace ShippingTrackingUtilities
                 switch (carrier)
                 {
                     case CarrierName.UPS:
-                        trackingFacility = new UPSTracking(trackingNo);
+                        trackingFacility = new UPSTracking();
                         break;
                     case CarrierName.USPS:
-                        trackingFacility = new USPSTracking(trackingNo);
+                        trackingFacility = new USPSTracking();
                         break;
                     case CarrierName.FedEx:
-                        trackingFacility = new FedExTracking(trackingNo);
+                        trackingFacility = new FedExTracking();
                         break;
                     default:
-                        trackingFacility = new USPSTracking(trackingNo);
+                        trackingFacility = new USPSTracking();
                         break;
                 }
 
-                shippingResult = trackingFacility.GetTrackingResult();
+                shippingResult = trackingFacility.GetTrackingResult(trackingNo);
             }
         }
 

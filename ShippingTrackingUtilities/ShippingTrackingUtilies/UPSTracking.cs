@@ -1,23 +1,22 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Text;
 using System.Xml.Serialization;
 namespace ShippingTrackingUtilities
 {
-    public class UPSTracking :ITrackingFacility
+    public class UPSTracking : ITrackingFacility
     {
-        string trackingNumber;
 
-        public UPSTracking(string trackingNumber)
+        public UPSTracking()
         {
-            this.trackingNumber = trackingNumber;
         }
 
-        public ShippingResult GetTrackingResult()
+        public ShippingResult GetTrackingResult(string trackingNumber)
         {
             ShippingResult shippingResult = new ShippingResult();
-            string shippingResultInString = GetTrackingInfoUPSInString();
+            string shippingResultInString = GetTrackingInfoUPSInString(trackingNumber);
             XmlSerializer serializer = new XmlSerializer(typeof(UPSTrackingResult.TrackResponse));
             MemoryStream memStream = new MemoryStream(Encoding.UTF8.GetBytes(shippingResultInString));
 
@@ -81,7 +80,7 @@ namespace ShippingTrackingUtilities
             return result;
         }
 
-        private string GetTrackingInfoUPSInString()
+        private string GetTrackingInfoUPSInString(string trackingNumber)
         {
             string apiUrl = "https://www.ups.com/ups.app/xml/Track"; // "https://wwwcie.ups.com/ups.app/xml/Track";
 
@@ -158,6 +157,11 @@ namespace ShippingTrackingUtilities
             }
 
             return shippingResult;
+        }
+
+        public List<ShippingResult> GetTrackingResult(List<string> trackingNumbers)
+        {
+            throw new NotImplementedException();
         }
     }
 }

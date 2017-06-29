@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -8,18 +9,15 @@ namespace ShippingTrackingUtilities
 {
     public class FedExTracking : ITrackingFacility
     {
-        string trackingNumber;
-
-        public FedExTracking(string trackingNumber)
+        public FedExTracking()
         {
-            this.trackingNumber = trackingNumber;
         }
 
-        public ShippingResult GetTrackingResult()
+        public ShippingResult GetTrackingResult(string trackingNumber)
         {
             ShippingResult shippingResult = new ShippingResult();
 
-            string shippingResultInString = GetTrackingInfoFedExInString();
+            string shippingResultInString = GetTrackingInfoFedExInString(trackingNumber);
 
             XmlSerializer serializer = new XmlSerializer(typeof(FedExTrackingResult.TrackReply));
             MemoryStream memStream = new MemoryStream(Encoding.UTF8.GetBytes(shippingResultInString));
@@ -32,6 +30,11 @@ namespace ShippingTrackingUtilities
             shippingResult = FedExTrackingResultWrap(resultingMessage);
 
             return shippingResult;
+        }
+
+        public List<ShippingResult> GetTrackingResult(List<string> trackingNumbers)
+        {
+            throw new NotImplementedException();
         }
 
         private ShippingResult FedExTrackingResultWrap(FedExTrackingResult.TrackReply resultMessage)
@@ -85,7 +88,7 @@ namespace ShippingTrackingUtilities
             return shippingResult;
         }
 
-        private string GetTrackingInfoFedExInString()
+        private string GetTrackingInfoFedExInString(string trackingNumber)
         {
             string apiUrl = "https://gatewaybeta.fedex.com:443/xml"; 
 

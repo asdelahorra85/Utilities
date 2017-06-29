@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Xml.Serialization;
@@ -9,21 +11,23 @@ namespace ShippingTrackingUtilities
 {
     public class USPSTracking : ITrackingFacility
     {
-        string[] trackingNumber;
-
-        public USPSTracking(string trackingNumber)
+        public USPSTracking()
         {
-            this.trackingNumber = trackingNumber;
         }
 
-        public ShippingResult GetTrackingResult()
+        public ShippingResult GetTrackingResult(string trackingNumber)
+        {
+            return this.GetTrackingResult(new List<string> { trackingNumber }).FirstOrDefault();
+        }
+
+        public List<ShippingResult> GetTrackingResult(List<string> trackingNumbers)
         {
             string shippingResultInString = string.Empty;
-            ShippingResult shippingResult = new ShippingResult();
+            List<ShippingResult> shippingResult = new List<ShippingResult>();
 
-            shippingResultInString = GetTrackingInfoUSPSInString();
+            shippingResultInString = GetTrackingInfoUSPSInString(trackingNumbers);
 
-            
+
             MemoryStream memStream = new MemoryStream(Encoding.UTF8.GetBytes(shippingResultInString));
 
 
@@ -36,20 +40,20 @@ namespace ShippingTrackingUtilities
                 {
                     XmlSerializer serializer = new XmlSerializer(typeof(USPSTrackingResultError.Error));
                     error = (USPSTrackingResultError.Error)serializer.Deserialize(memStream);
-                    shippingResult = USPSTrackingResultErrorWrap(error);
-                } 
+                    shippingResult.Add(USPSTrackingResultErrorWrap(error));
+                }
                 else
                 {
                     XmlSerializer serializer = new XmlSerializer(typeof(USPSTrackingResult.TrackResponse));
                     resultingMessage = (USPSTrackingResult.TrackResponse)serializer.Deserialize(memStream);
                     shippingResult = USPSTrackingResultWrap(resultingMessage);
-                }        
+                }
             }
-                    
+
             return shippingResult;
         }
 
-        private string GetTrackingInfoUSPSInString()
+        private string GetTrackingInfoUSPSInString(List<string> trackingNumbers)
         {
             string USPS_USERID = ConnectionString.USPS_USERID;
 
@@ -63,7 +67,10 @@ namespace ShippingTrackingUtilities
                 USPS += "<Revision>1</Revision>";
                 USPS += "<ClientIp>" + "127.0.0.1" + "</ClientIp>";
                 USPS += "<SourceId>" + "SV" + "</SourceId>";
-                USPS += "<TrackID ID=\"" + trackingNumber + "\"></TrackID>";
+
+                foreach (string tr in trackingNumbers)
+                    USPS += "<TrackID ID=\"" + tr + "\"></TrackID>";
+
                 USPS += "</TrackFieldRequest>";
 
 
@@ -98,63 +105,90 @@ namespace ShippingTrackingUtilities
 
             return shippingResult;
         }
-        private ShippingResult USPSTrackingResultWrap(USPSTrackingResult.TrackResponse resultingMessage)
+        private List<ShippingResult> USPSTrackingResultWrap(USPSTrackingResult.TrackResponse resultingMessage)
         {
-            ShippingResult shippingResult = new ShippingResult();
+            List<ShippingResult> shippingResults = new List<ShippingResult>();
 
-            shippingResult.ServiceType = resultingMessage.Items[0].Class;
-            shippingResult.StatusCode = resultingMessage.Items[0].StatusCategory;
-            shippingResult.Status = resultingMessage.Items[0].Status;
-            shippingResult.StatusSummary = resultingMessage.Items[0].StatusSummary;
+            foreach (var trackingInfo in resultingMessage.Items)
+            {
+                ShippingResult shippingResult = new ShippingResult();
 
-            if (resultingMessage.Items[0].Error != null)
-            {
-                if (!string.IsNullOrEmpty(resultingMessage.Items[0].Error.Number.ToString()))
+                shippingResult.ServiceType =trackingInfo.Class;
+                shippingResult.StatusCode = trackingInfo.StatusCategory;
+                shippingResult.Status = trackingInfo.Status;
+                shippingResult.StatusSummary = trackingInfo.StatusSummary;
+
+                if (trackingInfo.Error != null)
                 {
-                    shippingResult.Delivered = false;
-                    shippingResult.StatusCode = "Error";
-                    shippingResult.Status = resultingMessage.Items[0].Error.Description;
-                    shippingResult.StatusSummary = resultingMessage.Items[0].Error.Description;
-                    shippingResult.Message = resultingMessage.Items[0].Error.Description;
-                } 
-            }
-            
-            if (!string.IsNullOrEmpty(shippingResult.StatusCode))
-            {
-                if (shippingResult.StatusCode.ToUpper().Trim() == "DELIVERED")
-                {
-                    shippingResult.Delivered = true;
-                    foreach (var item in resultingMessage.Items[0].TrackSummary)
+                    if (!string.IsNullOrEmpty(trackingInfo.ToString()))
                     {
-                        if (item.Event.ToUpper().Contains("DELIVERED"))
+                        shippingResult.Delivered = false;
+                        shippingResult.StatusCode = "Error";
+                        shippingResult.Status = trackingInfo.Error.Description;
+                        shippingResult.StatusSummary = trackingInfo.Error.Description;
+                        shippingResult.Message = trackingInfo.Error.Description;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(shippingResult.StatusCode))
+                {
+                    if (shippingResult.StatusCode.ToUpper().Trim() == "DELIVERED")
+                    {
+                        shippingResult.Delivered = true;
+                        foreach (var item in trackingInfo.TrackSummary)
                         {
-                            shippingResult.DeliveredDateTime = item.EventDate + " " + item.EventTime;
+                            if (item.Event.ToUpper().Contains("DELIVERED"))
+                            {
+                                shippingResult.DeliveredDateTime = item.EventDate + " " + item.EventTime;
 
-                            //by CJ on Oct-05-2016, to have the signatureName.
-                            shippingResult.SignatureName = string.IsNullOrEmpty(item.Name) ? "" : item.Name;
+                                //by CJ on Oct-05-2016, to have the signatureName.
+                                shippingResult.SignatureName = string.IsNullOrEmpty(item.Name) ? "" : item.Name;
 
-                            break;
+                                break;
+                            }
                         }
                     }
                 }
-            }
 
-            if (resultingMessage.Items[0].TrackDetail != null)
-            {
-                if (resultingMessage.Items[0].TrackDetail.Length > 0)
+                if (!string.IsNullOrEmpty(shippingResult.StatusCode))
                 {
-                    foreach (var detail in resultingMessage.Items[0].TrackDetail)
+                    if (shippingResult.StatusCode.ToUpper().Trim() == "DELIVERED")
                     {
-                        ShippingResultEventDetail eventDetail = new ShippingResultEventDetail();
-                        eventDetail.Event = detail.Event;
-                        eventDetail.EventDateTime = detail.EventDate + " " + detail.EventTime;
-                        eventDetail.EventAddress = detail.EventCity + " " + detail.EventState + " " + detail.EventZIPCode;
-                        shippingResult.TrackingDetails.Add(eventDetail);
-                    }      
+                        shippingResult.Delivered = true;
+                        foreach (var item in trackingInfo.TrackSummary)
+                        {
+                            if (item.Event.ToUpper().Contains("DELIVERED"))
+                            {
+                                shippingResult.DeliveredDateTime = item.EventDate + " " + item.EventTime;
+
+                                //by CJ on Oct-05-2016, to have the signatureName.
+                                shippingResult.SignatureName = string.IsNullOrEmpty(item.Name) ? "" : item.Name;
+
+                                break;
+                            }
+                        }
+                    }
                 }
+
+                if (trackingInfo.TrackDetail != null)
+                {
+                    if (trackingInfo.TrackDetail.Length > 0)
+                    {
+                        foreach (var detail in trackingInfo.TrackDetail)
+                        {
+                            ShippingResultEventDetail eventDetail = new ShippingResultEventDetail();
+                            eventDetail.Event = detail.Event;
+                            eventDetail.EventDateTime = detail.EventDate + " " + detail.EventTime;
+                            eventDetail.EventAddress = detail.EventCity + " " + detail.EventState + " " + detail.EventZIPCode;
+                            shippingResult.TrackingDetails.Add(eventDetail);
+                        }
+                    }
+                }
+
+                shippingResults.Add(shippingResult);
             }
 
-            return shippingResult;
+            return shippingResults;
         }
     }
 }
