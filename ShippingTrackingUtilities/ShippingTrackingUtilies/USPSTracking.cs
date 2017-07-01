@@ -14,6 +14,7 @@ namespace ShippingTrackingUtilities
         private MemoryStream _memStream;
         private WebClient _wsClient;
 
+
         public USPSTracking()
         {
         }
