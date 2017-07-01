@@ -9,8 +9,11 @@ using System.Xml.Serialization;
 
 namespace ShippingTrackingUtilities
 {
-    public class USPSTracking : ITrackingFacility
+    public class USPSTracking : ITrackingFacility, IDisposable
     {
+        private MemoryStream _memStream;
+        private WebClient _wsClient;
+
         public USPSTracking()
         {
         }
@@ -25,31 +28,42 @@ namespace ShippingTrackingUtilities
             string shippingResultInString = string.Empty;
             List<ShippingResult> shippingResult = new List<ShippingResult>();
 
-            shippingResultInString = GetTrackingInfoUSPSInString(trackingNumbers);
-
-
-            MemoryStream memStream = new MemoryStream(Encoding.UTF8.GetBytes(shippingResultInString));
-
-
-            USPSTrackingResult.TrackResponse resultingMessage = new USPSTrackingResult.TrackResponse();
-            USPSTrackingResultError.Error error = new USPSTrackingResultError.Error();
-
-            if (memStream != null)
+            int splitCount = 0;
+            List<string> throttledTrackings = null;
+            while ((throttledTrackings = trackingNumbers.Skip(splitCount).Take(10).ToList()).Count()!=0)
             {
-                if (shippingResultInString.Contains("<Error>") && !shippingResultInString.Contains("<TrackResponse>"))
+                if (splitCount != 0)
+                    System.Threading.Thread.Sleep(5000);
+
+                splitCount += 10;
+
+                shippingResultInString = GetTrackingInfoUSPSInString(throttledTrackings);
+
+                _memStream = new MemoryStream(Encoding.UTF8.GetBytes(shippingResultInString));
+
+
+                USPSTrackingResult.TrackResponse resultingMessage = new USPSTrackingResult.TrackResponse();
+                USPSTrackingResultError.Error error = new USPSTrackingResultError.Error();
+
+                if (_memStream != null)
                 {
-                    XmlSerializer serializer = new XmlSerializer(typeof(USPSTrackingResultError.Error));
-                    error = (USPSTrackingResultError.Error)serializer.Deserialize(memStream);
-                    shippingResult.Add(USPSTrackingResultErrorWrap(error));
-                }
-                else
-                {
-                    XmlSerializer serializer = new XmlSerializer(typeof(USPSTrackingResult.TrackResponse));
-                    resultingMessage = (USPSTrackingResult.TrackResponse)serializer.Deserialize(memStream);
-                    shippingResult = USPSTrackingResultWrap(resultingMessage);
+                    if (shippingResultInString.Contains("<Error>") && !shippingResultInString.Contains("<TrackResponse>"))
+                    {
+                        XmlSerializer serializer = new XmlSerializer(typeof(USPSTrackingResultError.Error));
+                        error = (USPSTrackingResultError.Error)serializer.Deserialize(_memStream);
+                        shippingResult.Add(USPSTrackingResultErrorWrap(error));
+                        serializer = null;
+                    }
+                    else
+                    {
+                        XmlSerializer serializer = new XmlSerializer(typeof(USPSTrackingResult.TrackResponse));
+                        resultingMessage = (USPSTrackingResult.TrackResponse)serializer.Deserialize(_memStream);
+                        shippingResult = USPSTrackingResultWrap(resultingMessage);
+                        serializer = null;
+                    }
                 }
             }
-
+            
             return shippingResult;
         }
 
@@ -74,8 +88,8 @@ namespace ShippingTrackingUtilities
                 USPS += "</TrackFieldRequest>";
 
 
-                WebClient wsClient = new WebClient();
-                byte[] responseData = wsClient.DownloadData(USPS);
+                _wsClient = new WebClient();
+                byte[] responseData = _wsClient.DownloadData(USPS);
 
                 foreach (byte item in responseData)
                 {
@@ -190,5 +204,52 @@ namespace ShippingTrackingUtilities
 
             return shippingResults;
         }
+
+        #region IDisposable Support
+        private bool disposedValue = false; // To detect redundant calls
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    // TODO: dispose managed state (managed objects).
+                }
+
+                // TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
+                // TODO: set large fields to null.
+
+                if (_memStream != null)
+                {
+                    _memStream.Dispose();
+                    _memStream = null;
+                }
+
+                if (_wsClient != null)
+                {
+                    _wsClient.Dispose();
+                    _wsClient = null;
+                }
+
+                disposedValue = true;
+            }
+        }
+
+        // TODO: override a finalizer only if Dispose(bool disposing) above has code to free unmanaged resources.
+        // ~USPSTracking() {
+        //   // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+        //   Dispose(false);
+        // }
+
+        // This code added to correctly implement the disposable pattern.
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+            Dispose(true);
+            // TODO: uncomment the following line if the finalizer is overridden above.
+            // GC.SuppressFinalize(this);
+        }
+        #endregion
     }
 }
