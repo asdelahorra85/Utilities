@@ -1,13 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Xml.Serialization;
 namespace ShippingTrackingUtilities
 {
-    public class UPSTracking : ITrackingFacility
+    public class UPSTracking : ITrackingFacility, IDisposable
     {
+        private MemoryStream _memStream;
 
         public UPSTracking()
         {
@@ -15,20 +17,28 @@ namespace ShippingTrackingUtilities
 
         public ShippingResult GetTrackingResult(string trackingNumber)
         {
-            ShippingResult shippingResult = new ShippingResult();
-            string shippingResultInString = GetTrackingInfoUPSInString(trackingNumber);
-            XmlSerializer serializer = new XmlSerializer(typeof(UPSTrackingResult.TrackResponse));
-            MemoryStream memStream = new MemoryStream(Encoding.UTF8.GetBytes(shippingResultInString));
+            return this.GetTrackingResult(new List<string> { trackingNumber }).FirstOrDefault();
+        }
 
-            UPSTrackingResult.TrackResponse resultingMessage = new UPSTrackingResult.TrackResponse();
+        public List<ShippingResult> GetTrackingResult(List<string> trackingNumbers)
+        {
+            List<ShippingResult> shippingResult = new List<ShippingResult>();
 
-            if (memStream != null)
-                resultingMessage = (UPSTrackingResult.TrackResponse)serializer.Deserialize(memStream);
+            foreach (string trackingNumber in trackingNumbers)
+            {
+                string shippingResultInString = GetTrackingInfoUPSInString(trackingNumber);
+                XmlSerializer serializer = new XmlSerializer(typeof(UPSTrackingResult.TrackResponse));
+                _memStream = new MemoryStream(Encoding.UTF8.GetBytes(shippingResultInString));
 
-            shippingResult = UPSTrackingResultWrap(resultingMessage);
+                UPSTrackingResult.TrackResponse resultingMessage = new UPSTrackingResult.TrackResponse();
 
+                if (_memStream != null)
+                    resultingMessage = (UPSTrackingResult.TrackResponse)serializer.Deserialize(_memStream);
+
+                shippingResult.Add(UPSTrackingResultWrap(resultingMessage));
+            }
+            
             return shippingResult;
-
         }
 
         private string UPSRequest(string url, string requestText)
@@ -159,9 +169,47 @@ namespace ShippingTrackingUtilities
             return shippingResult;
         }
 
-        public List<ShippingResult> GetTrackingResult(List<string> trackingNumbers)
+        #region IDisposable Support
+        private bool disposedValue = false; // To detect redundant calls
+
+        protected virtual void Dispose(bool disposing)
         {
-            throw new NotImplementedException();
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    // TODO: dispose managed state (managed objects).
+                }
+
+                // TODO: free unmanaged resources (unmanaged objects) and override a finalizer below.
+                // TODO: set large fields to null.
+
+
+                if (_memStream != null)
+                {
+                    _memStream.Dispose();
+                    _memStream = null;
+                }
+
+                disposedValue = true;
+            }
         }
+
+        // TODO: override a finalizer only if Dispose(bool disposing) above has code to free unmanaged resources.
+        // ~UPSTracking() {
+        //   // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+        //   Dispose(false);
+        // }
+
+        // This code added to correctly implement the disposable pattern.
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+            Dispose(true);
+            // TODO: uncomment the following line if the finalizer is overridden above.
+            // GC.SuppressFinalize(this);
+        }
+        #endregion
+
     }
 }

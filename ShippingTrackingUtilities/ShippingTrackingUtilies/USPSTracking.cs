@@ -31,7 +31,7 @@ namespace ShippingTrackingUtilities
 
             int splitCount = 0;
             List<string> throttledTrackings = null;
-            while ((throttledTrackings = trackingNumbers.Skip(splitCount).Take(10).ToList()).Count()!=0)
+            while ((throttledTrackings = trackingNumbers.Skip(splitCount).Take(10).ToList()).Count() != 0)
             {
                 if (splitCount != 0)
                     System.Threading.Thread.Sleep(5000);
@@ -59,12 +59,12 @@ namespace ShippingTrackingUtilities
                     {
                         XmlSerializer serializer = new XmlSerializer(typeof(USPSTrackingResult.TrackResponse));
                         resultingMessage = (USPSTrackingResult.TrackResponse)serializer.Deserialize(_memStream);
-                        shippingResult = USPSTrackingResultWrap(resultingMessage);
+                        shippingResult.AddRange(USPSTrackingResultWrap(resultingMessage));
                         serializer = null;
                     }
                 }
             }
-            
+
             return shippingResult;
         }
 
@@ -127,12 +127,11 @@ namespace ShippingTrackingUtilities
             foreach (var trackingInfo in resultingMessage.Items)
             {
                 ShippingResult shippingResult = new ShippingResult();
-
-                shippingResult.ServiceType =trackingInfo.Class;
+                shippingResult.TrackingNumber = trackingInfo.ID;
+                shippingResult.ServiceType = trackingInfo.Class;
                 shippingResult.StatusCode = trackingInfo.StatusCategory;
                 shippingResult.Status = trackingInfo.Status;
                 shippingResult.StatusSummary = trackingInfo.StatusSummary;
-
                 if (trackingInfo.Error != null)
                 {
                     if (!string.IsNullOrEmpty(trackingInfo.ToString()))

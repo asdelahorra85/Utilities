@@ -4,6 +4,7 @@ namespace ShippingTrackingUtilities
 {
     public class ShippingResult
     {
+        public string TrackingNumber { get; set; }
         public bool Delivered { get; set; }
         public string ServiceType { get; set; }
         public string PickupDate { get; set; }
